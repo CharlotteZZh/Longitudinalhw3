@@ -3,12 +3,13 @@ title: "P8157 Homework 3"
 output:
   pdf_document:
     latex_engine: xelatex
+header-includes:
+  - \usepackage{float}
 ---
 
 ## Question 1
 
 ### (a)
-
 ```{r setup, message=FALSE}
 library(nlme)
 library(knitr)
@@ -49,32 +50,27 @@ tab <- data.frame(
   col(m1), col(m2), row.names = NULL)
 names(tab) <- c("", "Model (i): Estimate (95% CI)", "p-value",
                 "Model (ii): Estimate (95% CI)", "p-value")
-kable(tab, align = "lcccc",
-      caption = paste("Linear mixed models for weight (lbs) in 120 patients.",
-                      "Model (i): random intercepts; model (ii): random intercepts and slopes.",
-                      "Diet 0 (counseling at baseline only) is the reference group."))
+kable(tab, align = "lcccc")
 ```
 
 ### Interpretation of model (ii)
-
 **Fixed effects**
 
-* **Intercept (250.99):** the mean weight at baseline for patients in diet 0 is 250.99 lbs.
-* **Diet 1 (−0.70):** at baseline, mean weight in diet 1 is 0.70 lbs lower than in diet 0 (not significant, p = 0.34).
-* **Diet 2 (−2.69):** at baseline, mean weight in diet 2 is 2.69 lbs lower than in diet 0 (p < 0.001).
-* **Time (0.019):** in diet 0, mean weight changes by 0.019 lbs per month (not significant, p = 0.61), so there is no evidence of weight change in diet 0.
-* **Diet 1 × time (−0.102):** the rate of change in mean weight is 0.102 lbs/month lower in diet 1 than in diet 0 (p = 0.044), i.e., diet 1 loses weight faster.
-* **Diet 2 × time (−0.491):** the rate of change in mean weight is 0.491 lbs/month lower in diet 2 than in diet 0 (p < 0.001), i.e., diet 2 loses weight fastest.
+* Intercept (250.99): the mean weight at baseline for patients in diet 0 is 250.99 lbs.
+* Diet 1 (−0.70): at baseline, mean weight in diet 1 is 0.70 lbs lower than in diet 0 (not significant, p = 0.34).
+* Diet 2 (−2.69): at baseline, mean weight in diet 2 is 2.69 lbs lower than in diet 0 (p < 0.001).
+* Time (0.019): in diet 0, mean weight changes by 0.019 lbs per month (not significant, p = 0.61), so there is no evidence of weight change in diet 0.
+* Diet 1 × time (−0.102): the rate of change in mean weight is 0.102 lbs/month lower in diet 1 than in diet 0 (p = 0.044), i.e., diet 1 loses weight faster.
+* Diet 2 × time (−0.491): the rate of change in mean weight is 0.491 lbs/month lower in diet 2 than in diet 0 (p < 0.001), i.e., diet 2 loses weight fastest.
 
 **Variance components**
 
-* **SD of random intercepts (3.20):** within the same diet group, patients' baseline weights vary around the group mean with SD 3.20 lbs.
-* **SD of random slopes (0.162):** within the same diet group, patients' rates of weight change vary around the group mean slope with SD 0.162 lbs/month.
-* **Correlation (−0.40):** patients with higher baseline weight tend to have more negative slopes (lose weight faster).
-* **Residual SD (1.00):** a patient's observed weight at a visit varies around their own fitted line with SD 1.00 lbs.
+* SD of random intercepts (3.20): within the same diet group, patients' baseline weights vary around the group mean with SD 3.20 lbs.
+* SD of random slopes (0.162): within the same diet group, patients' rates of weight change vary around the group mean slope with SD 0.162 lbs/month.
+* Correlation (−0.40): patients with higher baseline weight tend to have more negative slopes (lose weight faster).
+* Residual SD (1.00): a patient's observed weight at a visit varies around their own fitted line with SD 1.00 lbs.
 
 ### (b)
-
 Let $\mathbf{b}_i = (b_{0i}, b_{1i})^T \sim N(\mathbf{0}, \mathbf{G})$ with $\mathbf{G} = \begin{pmatrix} \sigma^2_{b0} & \sigma_{b01} \\ \sigma_{b01} & \sigma^2_{b1} \end{pmatrix}$.
 
 * $H_0$: $\sigma^2_{b1} = 0$ (and therefore $\sigma_{b01} = 0$), i.e., the random intercept model (i) is adequate.
@@ -108,3 +104,117 @@ c(observed_LRT = lrt_obs, simulated_p_value = mean(lrt_null >= lrt_obs))
 ```
 
 The observed LRT statistic is `r round(lrt_obs, 1)`, far above the simulated 95th percentile (`r round(q_sim, 2)`), and none of the 1000 simulated null statistics are this large (p < 0.001). We reject $H_0$: the random intercept model is not adequate, and the random intercept and slope model fits the data significantly better.
+
+### (c)
+```{r resid, fig.height=7, fig.width=7.5}
+wtloss$res <- resid(m1, type = "pearson")
+wtloss$fit <- fitted(m1)
+
+par(mfrow = c(2, 2))
+# 1. residuals vs fitted
+plot(wtloss$fit, wtloss$res, pch = 16, cex = 0.5, col = "grey40",
+     xlab = "Fitted values", ylab = "Standardized residuals",
+     main = "Residuals vs. fitted")
+abline(h = 0, col = "red")
+# 2. normal QQ plot of residuals
+qqnorm(wtloss$res, pch = 16, cex = 0.5, main = "Normal QQ: residuals")
+qqline(wtloss$res, col = "red")
+# 3. residuals vs time, with a least-squares line for each patient
+plot(wtloss$time, wtloss$res, type = "n", xlab = "Time (months)",
+     ylab = "Standardized residuals", main = "Residuals vs. time (line per patient)")
+for (d in split(wtloss, wtloss$id))
+  abline(lm(res ~ time, data = d), col = adjustcolor("blue", 0.3))
+abline(h = 0, col = "red", lwd = 2)
+# 4. normal QQ plot of predicted random intercepts
+qqnorm(ranef(m1)[, 1], pch = 16, main = "Normal QQ: random intercepts")
+qqline(ranef(m1)[, 1], col = "red")
+```
+
+```{r resid_var}
+# variance of the residuals at each visit
+round(tapply(wtloss$res, wtloss$time, var), 2)
+```
+
+* Residuals vs. fitted and QQ plots: residuals are centered at zero with no clear pattern against the fitted values, and both the residuals and the random intercepts look approximately normal.
+* Residuals vs. time: under model (i), each patient's residuals should scatter around zero with no trend. Instead, the per-patient lines fan out, with clear positive and negative slopes, so patients' rates of weight change differ in a way model (i) does not capture.
+* Residual variance by visit: the variance is largest at the first and last visits and smallest in the middle (U-shaped). Model (i) assumes it is constant over time. A U shape is what random slopes produce, since they make the variance quadratic in time.
+
+Conclusion: model (i) is reasonable in terms of normality, but the residuals show leftover patient-specific time trends and non-constant variance over time, so the random intercept model is not adequate. This agrees with part (b), where the test favored the random intercept and slope model.
+
+### (d)
+```{r gee, message=FALSE}
+library(geepack)
+# data are sorted by id and time, as geeglm requires
+gee_i  <- geeglm(weight ~ diet * time, id = id, waves = time,
+                 data = wtloss, corstr = "independence")
+gee_e  <- geeglm(weight ~ diet * time, id = id, waves = time,
+                 data = wtloss, corstr = "exchangeable")
+gee_ar <- geeglm(weight ~ diet * time, id = id, waves = time,
+                 data = wtloss, corstr = "ar1")
+```
+
+```{r gee_table, echo=FALSE, results="asis"}
+gcol <- function(g) {
+  s  <- coef(summary(g))
+  d  <- ifelse(grepl("time", rownames(s)), 3, 2)
+  est <- mapply(f, s$Estimate, s$Estimate - 1.96 * s$Std.err, s$Estimate + 1.96 * s$Std.err, d)
+  a  <- if (length(g$geese$alpha)) sprintf("%.2f", g$geese$alpha) else "—"
+  cbind(c(est, a), c(fp(s[, "Pr(>|W|)"]), ""))
+}
+gtab <- data.frame(
+  c("Intercept", "Diet 1 vs. 0", "Diet 2 vs. 0", "Time (months)",
+    "Diet 1 × time", "Diet 2 × time", "Working corr."),
+  gcol(gee_i), gcol(gee_e), gcol(gee_ar), row.names = NULL)
+names(gtab) <- c("", "GEE-I", "p", "GEE-E", "p", "GEE-AR1", "p")
+cat("\\setlength{\\tabcolsep}{4pt}\\footnotesize\n")
+print(kable(gtab, format = "latex", booktabs = TRUE, align = "lcccccc",
+      linesep = "", position = "H",
+      caption = paste("GEE models for weight (lbs) in 120 patients: estimate (95\\% CI).",
+                      "GEE-I, GEE-E and GEE-AR1 use working independence, exchangeable and AR-1",
+                      "correlation. CIs and p-values use robust (sandwich) standard errors.",
+                      "Diet 0 (counseling at baseline only) is the reference group.")))
+cat("\\normalsize\\setlength{\\tabcolsep}{6pt}\n")
+```
+
+All estimates are population-averaged.
+
+* Intercept (250.95): the mean weight at baseline for patients in diet 0 is 250.95 lbs.
+* Diet 1 (−0.65): at baseline, mean weight in diet 1 is 0.65 lbs lower than in diet 0 (not significant, p = 0.38).
+* Diet 2 (−2.66): at baseline, mean weight in diet 2 is 2.66 lbs lower than in diet 0 (p < 0.001).
+* Time (0.040): in diet 0, mean weight changes by 0.040 lbs per month (not significant, p = 0.25), so there is no evidence of weight change in diet 0.
+* Diet 1 × time (−0.124): the rate of change in mean weight is 0.124 lbs/month lower in diet 1 than in diet 0 (p = 0.024), i.e., diet 1 loses weight faster.
+* Diet 2 × time (−0.500): the rate of change in mean weight is 0.500 lbs/month lower in diet 2 than in diet 0 (p < 0.001), i.e., diet 2 loses weight fastest.
+
+### (e)
+Let $\beta_4$ and $\beta_5$ be the diet 1 × time and diet 2 × time coefficients.
+
+* $H_0$: $\beta_4 = \beta_5 = 0$ (the rate of weight change is the same in all three diet groups).
+* $H_1$: at least one of $\beta_4, \beta_5 \neq 0$ (the rate of weight change differs for at least one group).
+
+```{r wald}
+b <- coef(gee_e)[c("diet1:time", "diet2:time")]
+V <- vcov(gee_e)[c("diet1:time", "diet2:time"), c("diet1:time", "diet2:time")]
+W <- as.numeric(t(b) %*% solve(V) %*% b)          # robust Wald statistic
+c(Wald = W, df = 2, p_value = pchisq(W, df = 2, lower.tail = FALSE))
+```
+
+The robust Wald test gives $\chi^2_2$ = `r round(W, 1)`, p < 0.001, so we reject $H_0$.
+
+For non-biostats collaborators: the three programs did not lead to the same rate of weight loss. Patients who got counseling only at the first visit had essentially no change in weight over the year (about +0.04 lbs per month). Patients who got counseling at every visit lost weight slowly (about 0.08 lbs per month, or 1 lb over 12 months). Patients who also got free gym access lost weight the fastest (about 0.46 lbs per month, or 5.5 lbs over 12 months). Differences this large would be very unlikely if the programs truly worked equally well.
+
+### (f)
+```{r se_compare}
+# standard errors: model-based for the LMMs, robust (sandwich) for GEE
+se <- cbind("LMM (i)" = sqrt(diag(vcov(m1))), "LMM (ii)" = sqrt(diag(vcov(m2))),
+            "GEE-I" = coef(summary(gee_i))$Std.err, "GEE-E" = coef(summary(gee_e))$Std.err,
+            "GEE-AR1" = coef(summary(gee_ar))$Std.err)
+round(se, 3)
+```
+
+Point estimates: if the mean model is correct, all five estimators (LMM (i), LMM (ii), GEE-I, GEE-E, GEE-AR1) are consistent for $\boldsymbol\beta$, even if the assumed covariance structure is wrong. This assumes any missing visits are unrelated to weight (missing completely at random). The estimates in the tables differ somewhat (e.g., diet 1 × time is 0.008 for GEE-I but about −0.12 for the others) because of sampling variability, not bias. GEE-I in particular is the least efficient.
+
+Standard errors:
+
+* LMM (i): the SEs are model-based, so they are valid only if the random intercept covariance structure is correct. Parts (b) and (c) showed it is not, so these SEs are not valid. They are too small for the time terms (0.033 vs. about 0.05 for the other methods), which would overstate significance.
+* LMM (ii): also model-based, but parts (b) and (c) suggest this covariance structure fits much better. Its SEs agree closely with the robust GEE-E SEs, so they look approximately valid.
+* GEE-I, GEE-E, GEE-AR1: the robust (sandwich) SEs are valid even when the working correlation is wrong, because K = 120 patients is reasonably large. The working correlation affects efficiency, though. GEE-I has much larger SEs for the time terms (about 0.10 vs. 0.05), so GEE-E and GEE-AR1 are more efficient here.
